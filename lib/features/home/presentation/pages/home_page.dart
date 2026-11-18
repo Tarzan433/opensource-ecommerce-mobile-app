@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../core/widgets/channel_logo.dart';
 import '../../../../core/error/error_mapper.dart';
@@ -13,6 +12,7 @@ import '../../../../core/wishlist/wishlist_cubit.dart';
 import '../../data/models/home_models.dart';
 import '../../../product/presentation/pages/product_detail_page.dart';
 import '../../../category/presentation/pages/category_products_grid_page.dart';
+import '../../../category/data/models/category_model.dart';
 import '../../../category/data/repository/category_repository.dart';
 import '../../../category/presentation/bloc/category_bloc.dart';
 import '../../../cart/presentation/bloc/cart_bloc.dart';
@@ -27,15 +27,13 @@ import '../widgets/section_header.dart';
 import '../widgets/services_content_section.dart';
 import '../widgets/static_content_widget.dart';
 
+/// Quick-commerce header constants
+const String deliveryPrefixText = 'Delivery in';
+const String deliveryTimeText = '15 minutes';
+const String deliveryLocationText = 'Home - Mangaluru';
+const String searchPlaceholderText = 'Search "milk"';
+
 /// The main Home page of the Bagisto Flutter app.
-///
-/// Layout (matching Figma node 86:930):
-///   1. App bar with Bagisto logo, search icon, notification bell
-///   2. Scrollable body driven by `themeCustomizations`:
-///      • category_carousel → horizontal category circles
-///      • image_carousel → auto-scrolling banner
-///      • product_carousel → product sections (Featured, Hot Deals, New, etc.)
-///   3. "Back to Top" pill button at the bottom
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -45,6 +43,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
+  int _selectedCategoryTabIndex = 0; // MOCK category tabs state ("All" default)
 
   @override
   void initState() {
@@ -314,144 +313,392 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: isDark ? AppColors.neutral900 : AppColors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Top bar ──
-            _buildTopBar(context),
+      body: BlocBuilder<HomeBloc, HomeState>(
+        buildWhen: (previous, current) {
+          if (current.status == HomeStatus.refreshing) return false;
+          return true;
+        },
+        builder: (context, state) {
+          return Column(
+            children: [
+              // ── Quick-commerce header filling status bar ──
+              _buildTopBar(context, state.categories),
 
-            // ── Scrollable content ──
-            Expanded(
-              child: BlocBuilder<HomeBloc, HomeState>(
-                // Skip rebuilds when state changes to 'refreshing' — the old
-                // data is still valid and the RefreshIndicator already shows
-                // its own spinner. Rebuild only when data actually changes.
-                buildWhen: (previous, current) {
-                  if (current.status == HomeStatus.refreshing) return false;
-                  return true;
-                },
-                builder: (context, state) {
-                  // Show full-screen loader only on first load (no data yet).
-                  if (state.status == HomeStatus.loading &&
-                      state.customizations.isEmpty) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary500,
-                      ),
-                    );
-                  }
-
-                  if (state.status == HomeStatus.error &&
-                      state.customizations.isEmpty) {
-                    return _buildError(context, state);
-                  }
-
-                  // Show content for loaded/initial states, or when
-                  // data exists even during a background refresh.
-                  if (state.customizations.isNotEmpty) {
-                    return _buildContent(context, state);
-                  }
-
-                  // Fallback: initial state with no data yet.
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primary500,
-                    ),
-                  );
-                },
+              // ── Scrollable content ──
+              Expanded(
+                child: _buildBody(context, state),
               ),
-            ),
-          ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, HomeState state) {
+    // Show full-screen loader only on first load (no data yet).
+    if (state.status == HomeStatus.loading &&
+        state.customizations.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primary500,
         ),
+      );
+    }
+
+    if (state.status == HomeStatus.error &&
+        state.customizations.isEmpty) {
+      return _buildError(context, state);
+    }
+
+    // Show content for loaded/initial states, or when
+    // data exists even during a background refresh.
+    if (state.customizations.isNotEmpty || state.categories.isNotEmpty) {
+      return _buildContent(context, state);
+    }
+
+    // Fallback: initial state with no data yet.
+    return const Center(
+      child: CircularProgressIndicator(
+        color: AppColors.primary500,
       ),
     );
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // TOP BAR — Logo + Search + Notification
+  // TOP BAR — Quick-Commerce Header & Category Tabs
   // ──────────────────────────────────────────────────────────────────────
 
-  Widget _buildTopBar(BuildContext context) {
+  Widget _buildTopBar(BuildContext context, List<HomeCategory> categories) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      color: isDark ? AppColors.neutral900 : AppColors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      height: 48,
-      child: Row(
-        children: [
-          // Logo + "bagisto" text inside search-style container
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _openSearchPage(context),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.neutral800 : AppColors.white,
-                  border: Border.all(
-                    color: isDark ? AppColors.neutral700 : AppColors.neutral200,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: isDark
+              ? AppColors.headerGradientDark
+              : AppColors.headerGradientLight,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Shop name: small bold orange text at top-left above row 1
+              Text(
+                companyName,
+                style: const TextStyle(
+                  fontFamily: 'Roboto',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: AppColors.primary600,
+                  letterSpacing: 0.3,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Channel logo from admin, else Bagisto logo + text
-                    ChannelLogo(
-                      height: 24,
-                      fallback: Row(
-                        children: [
-                          SvgPicture.asset(
-                            'assets/images/bagisto_logo.svg',
-                            width: 20,
-                            height: 20,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'bagisto',
-                            style: TextStyle(
-                              fontFamily: 'Montserrat',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: isDark
-                                  ? AppColors.neutral100
-                                  : AppColors.black,
-                            ),
+              ),
+              const SizedBox(height: 1),
+
+              // Row 1: small text "Delivery in" and large bold "15 minutes"
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        '$deliveryPrefixText ',
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: isDark
+                              ? AppColors.neutral300
+                              : AppColors.neutral800,
+                        ),
+                      ),
+                      Text(
+                        deliveryTimeText,
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 22,
+                          letterSpacing: -0.4,
+                          color: isDark ? AppColors.white : AppColors.neutral900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // User avatar / channel logo
+                  ChannelLogo(
+                    height: 36,
+                    fallback: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.neutral800 : AppColors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                    ),
-                    // Search icon
-                    GestureDetector(
-                      onTap: () => _openSearchPage(context),
                       child: Icon(
+                        Icons.person,
+                        size: 20,
+                        color: isDark
+                            ? AppColors.neutral200
+                            : AppColors.neutral800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+
+              // Row 2: location line "Home - Mangaluru" with dropdown arrow
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    deliveryLocationText,
+                    style: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: isDark ? AppColors.neutral200 : AppColors.neutral900,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 18,
+                    color: isDark ? AppColors.neutral200 : AppColors.neutral900,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Row 3: rounded white search bar with search icon and placeholder text
+              GestureDetector(
+                onTap: () => _openSearchPage(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.neutral800 : AppColors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.neutral700
+                          : AppColors.neutral200,
+                      width: 0.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
                         Icons.search,
-                        size: 24,
+                        size: 20,
                         color: isDark
                             ? AppColors.neutral400
                             : AppColors.neutral800,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          searchPlaceholderText,
+                          style: TextStyle(
+                            fontFamily: 'Roboto',
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                            color: isDark
+                                ? AppColors.neutral400
+                                : AppColors.neutral500,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.mic_none_outlined,
+                        size: 20,
+                        color: isDark
+                            ? AppColors.neutral400
+                            : AppColors.neutral800,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 10),
+
+              // Category tabs: "All" first, then every top-level category.
+              // Prefer CategoryBloc list (uncapped). HomeBloc categories are
+              // limited by theme category_carousel filters.limit.
+              BlocBuilder<CategoryBloc, CategoryState>(
+                buildWhen: (previous, current) =>
+                    previous.categories != current.categories,
+                builder: (context, categoryState) {
+                  final tabCategories = categoryState.categories.isNotEmpty
+                      ? categoryState.categories
+                            .map(_homeCategoryFromTabCategory)
+                            .toList()
+                      : categories;
+                  return _buildCategoryTabsRow(context, tabCategories);
+                },
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          // Notification bell
-          // Container(
-          //   width: 44,
-          //   height: 46,
-          //   decoration: BoxDecoration(
-          //     border: Border.all(color: AppColors.neutral200),
-          //     borderRadius: BorderRadius.circular(10),
-          //   ),
-          //   child: const Icon(
-          //     Icons.notifications_outlined,
-          //     size: 24,
-          //     color: AppColors.neutral800,
-          //   ),
-          // ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// Map Categories-tab model → HomeCategory for tab row display only.
+  HomeCategory _homeCategoryFromTabCategory(CategoryModel category) {
+    return HomeCategory(
+      id: category.id,
+      numericId: category.numericId,
+      name: category.name,
+      slug: category.slug,
+      logoUrl: category.logoUrl ?? category.logoPath,
+      position: category.position ?? 0,
+    );
+  }
+
+  Widget _buildCategoryTabsRow(
+    BuildContext context,
+    List<HomeCategory> categories,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Index 0 is the mock "All" tab (selected by default).
+    final totalTabs = 1 + categories.length;
+
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: totalTabs,
+        separatorBuilder: (_, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final isSelected = _selectedCategoryTabIndex == index;
+          final String label = index == 0 ? 'All' : categories[index - 1].name;
+          final String? logoUrl =
+              index == 0 ? null : categories[index - 1].logoUrl;
+
+          return GestureDetector(
+            onTap: () {
+              // Mock only: update selected tab; no filtering.
+              setState(() {
+                _selectedCategoryTabIndex = index;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark
+                        ? AppColors.primary500.withValues(alpha: 0.22)
+                        : const Color(0xFFFFF1E6))
+                    : (isDark ? AppColors.neutral800 : AppColors.white),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.primary500
+                      : (isDark
+                          ? AppColors.neutral700
+                          : const Color(0xFFE2E4E8)),
+                  width: isSelected ? 1.4 : 1.0,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Icon or network category logo
+                  if (index == 0)
+                    Icon(
+                      Icons.grid_view_rounded,
+                      size: 15,
+                      color: isSelected
+                          ? AppColors.primary500
+                          : (isDark
+                              ? AppColors.neutral300
+                              : AppColors.neutral700),
+                    )
+                  else if (logoUrl != null && logoUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.network(
+                        logoUrl,
+                        width: 15,
+                        height: 15,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, error, stackTrace) => Icon(
+                          Icons.category_outlined,
+                          size: 15,
+                          color: isSelected
+                              ? AppColors.primary500
+                              : (isDark
+                                  ? AppColors.neutral400
+                                  : AppColors.neutral700),
+                        ),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.category_outlined,
+                      size: 15,
+                      color: isSelected
+                          ? AppColors.primary500
+                          : (isDark
+                              ? AppColors.neutral400
+                              : AppColors.neutral700),
+                    ),
+                  const SizedBox(width: 6),
+                  // Label
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: 12,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? (isDark
+                              ? AppColors.primary500
+                              : AppColors.primary600)
+                          : (isDark
+                              ? AppColors.neutral200
+                              : AppColors.neutral800),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -500,47 +747,61 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // MAIN CONTENT — Fixed Figma order (node 86:930)
-  //
-  //  1. Category carousel
-  //  2. Banner carousel (first set)
-  //  3. "Featured Products" — horizontal large cards
-  //  4. 3-image editorial grid
-  //  5. "Hot Deals" — 3×2 small card grid
-  //  6. Banner carousel (second set / reuse first)
-  //  7. "New Products" — 2×2 large card grid
-  //  8. 2-image editorial row
-  //  9. "Recently Viewed Products" — horizontal large cards
-  // 10. "Back to Top" pill button
+  // MAIN CONTENT — section order (under header/tabs):
+  //  1. Server-driven banner carousel (image_carousel)
+  //  2. Bestsellers grid
+  //  3. Remaining server-driven sections (product carousels, static, services)
+  //  4. Recently Viewed Products
+  //  5. Back to Top
   // ──────────────────────────────────────────────────────────────────────
 
   Widget _buildContent(BuildContext context, HomeState state) {
     final l10n = AppLocalizations.of(context)!;
-    // ── Build sections dynamically based on sortOrder from API ──
-    // The API returns sections in sortOrder, so we render them in that order
     final List<Widget> sections = [];
 
-    // Process each customization in sortOrder
+    // 1. Banner carousels directly under header/tabs (before Bestsellers)
+    for (final tc in state.customizations) {
+      if (tc.type != 'image_carousel') continue;
+      final imagesRaw = tc.options['images'] as List? ?? [];
+      final bannerImages = imagesRaw
+          .map(
+            (e) => BannerImage.fromJson(
+              e is Map<String, dynamic> ? e : <String, dynamic>{},
+            ),
+          )
+          .where((b) => b.imageUrl.isNotEmpty)
+          .toList();
+      if (bannerImages.isNotEmpty) {
+        sections.add(
+          ImageCarousel(
+            images: bannerImages,
+            onBannerTap: (banner) => _openLink(context, banner.link),
+          ),
+        );
+      }
+    }
+
+    // 2. "Bestsellers" section (horizontal scrolling cards)
+    if (state.categories.isNotEmpty) {
+      sections.add(
+        CategoryCarousel(
+          categories: state.categories,
+          onCategoryTap: (category) =>
+              _openCategoryProducts(context, category),
+          onSeeAll: () {
+            if (AppNavigator.maybeOf(context) != null) {
+              AppNavigator.goCategories(context);
+            }
+          },
+        ),
+      );
+    }
+
+    // 3. Remaining server-driven sections (skip banners + category_carousel)
     for (final tc in state.customizations) {
       switch (tc.type) {
         case 'image_carousel':
-          final imagesRaw = tc.options['images'] as List? ?? [];
-          final bannerImages = imagesRaw
-              .map(
-                (e) => BannerImage.fromJson(
-                  e is Map<String, dynamic> ? e : <String, dynamic>{},
-                ),
-              )
-              .where((b) => b.imageUrl.isNotEmpty)
-              .toList();
-          if (bannerImages.isNotEmpty) {
-            sections.add(
-              ImageCarousel(
-                images: bannerImages,
-                onBannerTap: (banner) => _openLink(context, banner.link),
-              ),
-            );
-          }
+          // Already placed above Bestsellers
           break;
 
         case 'product_carousel':
@@ -585,19 +846,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           break;
 
         case 'category_carousel':
-          if (state.categories.isNotEmpty) {
-            sections.add(
-              CategoryCarousel(
-                categories: state.categories,
-                onCategoryTap: (category) =>
-                    _openCategoryProducts(context, category),
-              ),
-            );
-          }
+          // Bestsellers already placed after banners
           break;
       }
     }
 
+    // 4. Recently viewed
     sections.add(
       RecentlyViewedProductsSection(
         onProductTap: (product) => _openProductDetail(context, product),
@@ -690,6 +944,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         product: product,
                         cardWidth: cardWidth,
                         onTap: () => _openProductDetail(context, product),
+                        onAddToCart: () => _addProductToCart(context, product),
                         isWishlisted:
                             pid > 0 && wishlistState.isWishlisted(pid),
                         isWishlistProcessing:
@@ -729,8 +984,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             // 20px padding each side, 12px gaps, two cards plus a peek of
             // the third so the row reads as horizontally scrollable.
             final cardWidth = (screenWidth - 40 - 24) / 2.3;
-            // Add a little extra space for price/rating rendering on smaller iOS devices.
-            final listHeight = cardWidth + 96;
+            // Add a little extra space for price/rating and ADD button on all devices.
+            final listHeight = cardWidth + 104;
             return SizedBox(
               height: listHeight,
               child: ListView.separated(

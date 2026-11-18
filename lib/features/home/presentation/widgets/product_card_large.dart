@@ -3,18 +3,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/models/home_models.dart';
 
-/// Large product card (Figma node 86:962).
+/// Large product card with quick-commerce styling.
 ///
-/// Fully responsive — accepts an optional [cardWidth]. If not provided,
-/// calculates from screen width: `(screenWidth - 40 - 12) / 2` which
-/// matches the Figma 375px → 162px formula (20px padding each side + 12px gap).
-///
-/// Figma spec:
-///   • Square rounded-12 image, overlay tint rgba(14,16,25,0.1)
-///   • Shopping-bag icon overlay top-right (24×24)
-///   • Product name 14px regular #262626, single-line ellipsis
-///   • Price: $special 18px semibold #171717 + $original 14px #737373 strikethrough + discount% 14px semibold #FF6900
-///   • Rating: green #00A63E rounded-6 pill (star 16px white + rating 14px bold white) + count 14px #171717
+/// Responsive: accepts [cardWidth] or calculates for 2-column horizontal row.
 class ProductCardLarge extends StatelessWidget {
   final HomeProduct product;
   final VoidCallback? onTap;
@@ -42,7 +33,6 @@ class ProductCardLarge extends StatelessWidget {
   double _resolveWidth(BuildContext context) {
     if (cardWidth != null) return cardWidth!;
     final screenWidth = MediaQuery.of(context).size.width;
-    // Figma: 20px padding each side + 12px gap between 2 cards
     return (screenWidth - 40 - 12) / 2;
   }
 
@@ -62,23 +52,62 @@ class ProductCardLarge extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildImage(w, isDark),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
+              if (product.reviewCount > 0) ...[
+                _buildRating(context),
+                const SizedBox(height: 4),
+              ],
               Text(
                 product.name,
                 style: TextStyle(
                   fontFamily: 'Roboto',
-                  fontWeight: FontWeight.w400,
-                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
                   height: 1.2,
                   color: isDark ? AppColors.neutral200 : AppColors.neutral800,
                 ),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 7),
-              _buildPriceRow(context),
-              const SizedBox(height: 7),
-              _buildRating(context),
+              const SizedBox(height: 6),
+              // Price and ADD button row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: _buildPriceRow(context),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: onAddToCart ?? onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.neutral800 : AppColors.white,
+                        border: Border.all(
+                          color: AppColors.primary500,
+                          width: 1.2,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'ADD',
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary500,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -90,18 +119,18 @@ class ProductCardLarge extends StatelessWidget {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           child: Container(
             width: size,
-            height: size,
-            color: const Color(0x1A0E1019),
+            height: size * 0.95,
+            color: isDark ? AppColors.neutral800 : const Color(0x1A0E1019),
             child:
                 product.baseImageUrl != null && product.baseImageUrl!.isNotEmpty
                 ? Image.network(
                     product.baseImageUrl!,
                     fit: BoxFit.cover,
                     width: size,
-                    height: size,
+                    height: size * 0.95,
                     errorBuilder: (context, error, stackTrace) =>
                         _imagePlaceholder(isDark),
                   )
@@ -115,23 +144,23 @@ class ProductCardLarge extends StatelessWidget {
             child: GestureDetector(
               onTap: isWishlistProcessing ? null : onWishlistTap,
               child: Container(
-                width: 28,
-                height: 28,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   color: AppColors.white.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: isWishlistProcessing
                     ? const Padding(
-                        padding: EdgeInsets.all(6),
+                        padding: EdgeInsets.all(5),
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                          strokeWidth: 1.5,
                           color: AppColors.neutral400,
                         ),
                       )
                     : Icon(
                         isWishlisted ? Icons.favorite : Icons.favorite_border,
-                        size: 16,
+                        size: 15,
                         color: isWishlisted ? Colors.red : AppColors.neutral800,
                       ),
               ),
@@ -145,66 +174,81 @@ class ProductCardLarge extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (product.hasDiscount) {
-      // Figma: flex row (not wrap) with gap-3, items centered vertically
-      // Use FittedBox to scale down when content exceeds card width
-      return FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              product.displayPriceLabel,
-              style: TextStyle(
-                fontFamily: 'Roboto',
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
-                height: 1.0,
-                color: isDark ? AppColors.white : AppColors.neutral900,
-              ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  product.displayPriceLabel,
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    height: 1.1,
+                    color: isDark ? AppColors.white : AppColors.neutral900,
+                  ),
+                ),
+                if (product.originalPriceLabel != null &&
+                    product.originalPriceLabel!.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    product.originalPriceLabel!,
+                    style: const TextStyle(
+                      fontFamily: 'Roboto',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                      height: 1.1,
+                      color: AppColors.neutral500,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(width: 3),
-            Text(
-              product.originalPriceLabel ?? '',
-              style: const TextStyle(
-                fontFamily: 'Roboto',
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
-                height: 1.0,
-                color: AppColors.neutral500,
-                decoration: TextDecoration.lineThrough,
-              ),
-            ),
-            const SizedBox(width: 3),
-            Text(
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
               l10n.homeDiscountOff(product.discountPercent.toString()),
               style: const TextStyle(
                 fontFamily: 'Roboto',
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
-                height: 1.0,
+                fontSize: 11,
+                height: 1.1,
                 color: AppColors.primary500,
               ),
+              maxLines: 1,
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    return Text(
-      product.displayPriceLabel,
-      style: TextStyle(
-        fontFamily: 'Roboto',
-        fontWeight: FontWeight.w600,
-        fontSize: 18,
-        height: 1.0,
-        color: isDark ? AppColors.white : AppColors.neutral900,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        product.displayPriceLabel,
+        style: TextStyle(
+          fontFamily: 'Roboto',
+          fontWeight: FontWeight.w700,
+          fontSize: 15,
+          height: 1.1,
+          color: isDark ? AppColors.white : AppColors.neutral900,
+        ),
       ),
     );
   }
 
-  /// Rating badge (Figma: bg #00A63E rounded-6, star + rating bold white, count 14px)
+  /// Rating badge
   Widget _buildRating(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (product.reviewCount == 0) return const SizedBox.shrink();
@@ -213,22 +257,22 @@ class ProductCardLarge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.only(left: 2, right: 4, top: 3, bottom: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
             color: AppColors.successGreen,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.star, size: 16, color: AppColors.white),
+              const Icon(Icons.star, size: 12, color: AppColors.white),
               const SizedBox(width: 1),
               Text(
                 ratingStr,
                 style: const TextStyle(
                   fontFamily: 'Roboto',
                   fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                  fontSize: 11,
                   color: AppColors.white,
                 ),
               ),
@@ -238,12 +282,12 @@ class ProductCardLarge extends StatelessWidget {
         const SizedBox(width: 3),
         Flexible(
           child: Text(
-            '${product.reviewCount}',
+            '(${product.reviewCount})',
             style: TextStyle(
               fontFamily: 'Roboto',
               fontWeight: FontWeight.w400,
-              fontSize: 14,
-              color: isDark ? AppColors.neutral300 : AppColors.neutral900,
+              fontSize: 11,
+              color: isDark ? AppColors.neutral400 : AppColors.neutral600,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -257,7 +301,7 @@ class ProductCardLarge extends StatelessWidget {
     return Center(
       child: Icon(
         Icons.image_outlined,
-        size: 40,
+        size: 36,
         color: isDark ? AppColors.neutral500 : AppColors.neutral400,
       ),
     );

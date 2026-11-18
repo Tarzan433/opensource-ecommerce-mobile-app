@@ -35,6 +35,63 @@ class AppColors {
   // Static
   static const Color white = Color(0xFFFFFFFF);
   static const Color black = Color(0xFF000000);
+
+  // Quick-Commerce Header Gradient - Light
+  static const Color headerGradientStart = Color(0xFFFFF2D6);
+  static const Color headerGradientMiddle = Color(0xFFFFE5B3);
+  static const Color headerGradientEnd = Color(0xFFFFF8EE);
+
+  // Quick-Commerce Header Gradient - Dark
+  static const Color headerGradientDarkStart = Color(0xFF26201B);
+  static const Color headerGradientDarkMiddle = Color(0xFF1E1A17);
+  static const Color headerGradientDarkEnd = Color(0xFF171717);
+
+  static const List<Color> headerGradientLight = [
+    headerGradientStart,
+    headerGradientMiddle,
+    headerGradientEnd,
+  ];
+
+  static const List<Color> headerGradientDark = [
+    headerGradientDarkStart,
+    headerGradientDarkMiddle,
+    headerGradientDarkEnd,
+  ];
+
+  // Bestsellers Card Backgrounds
+  static const Color bestsellerCardBg = Color(0xFFF3F5F7);
+  static const Color bestsellerCardDarkBg = Color(0xFF262626);
+}
+
+/// Spacing tokens (4, 8, 12, 16, 20, 24)
+class AppSpacing {
+  static const double s4 = 4.0;
+  static const double s8 = 8.0;
+  static const double s12 = 12.0;
+  static const double s16 = 16.0;
+  static const double s20 = 20.0;
+  static const double s24 = 24.0;
+}
+
+/// Border radius tokens
+class AppRadius {
+  static const double r4 = 4.0;
+  static const double r6 = 6.0;
+  static const double r8 = 8.0;
+  static const double r10 = 10.0;
+  static const double r12 = 12.0;
+  static const double r16 = 16.0;
+  static const double r20 = 20.0;
+  static const double r24 = 24.0;
+
+  static const BorderRadius rounded4 = BorderRadius.all(Radius.circular(r4));
+  static const BorderRadius rounded6 = BorderRadius.all(Radius.circular(r6));
+  static const BorderRadius rounded8 = BorderRadius.all(Radius.circular(r8));
+  static const BorderRadius rounded10 = BorderRadius.all(Radius.circular(r10));
+  static const BorderRadius rounded12 = BorderRadius.all(Radius.circular(r12));
+  static const BorderRadius rounded16 = BorderRadius.all(Radius.circular(r16));
+  static const BorderRadius rounded20 = BorderRadius.all(Radius.circular(r20));
+  static const BorderRadius rounded24 = BorderRadius.all(Radius.circular(r24));
 }
 
 class AppTextStyles {

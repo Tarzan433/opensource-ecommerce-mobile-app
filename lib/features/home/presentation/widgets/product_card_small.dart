@@ -2,20 +2,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/home_models.dart';
 
-/// Small product card for "Hot Deals" grid (Figma node 86:977).
+/// Compact grocery-style small product card for grids.
 ///
-/// Fully responsive — accepts an optional [cardWidth]. If not provided,
-/// calculates from screen width: `(screenWidth - 40 - 24) / 3` which
-/// matches the Figma 375px → 104px formula (20px padding each side + 2×12px gaps).
-///
-/// Figma spec:
-///   • Square rounded-12 image
-///   • Name 12px regular #262626, single-line ellipsis
-///   • Price 14px semibold #171717 (range for configurable)
-///   • Rating: small green pill bg #00A63E rounded-6 (star 14px + 4.5 12px bold white) + count 12px #171717
+/// Responsive: accepts [cardWidth] or calculates for 3-column layout.
 class ProductCardSmall extends StatelessWidget {
   final HomeProduct product;
   final VoidCallback? onTap;
+  final VoidCallback? onAddToCart;
   final VoidCallback? onWishlistTap;
   final bool isWishlisted;
   final bool isWishlistProcessing;
@@ -27,6 +20,7 @@ class ProductCardSmall extends StatelessWidget {
     super.key,
     required this.product,
     this.onTap,
+    this.onAddToCart,
     this.onWishlistTap,
     this.isWishlisted = false,
     this.isWishlistProcessing = false,
@@ -36,7 +30,6 @@ class ProductCardSmall extends StatelessWidget {
   double _resolveWidth(BuildContext context) {
     if (cardWidth != null) return cardWidth!;
     final screenWidth = MediaQuery.of(context).size.width;
-    // Figma: 20px padding each side + 2×12px gaps between 3 cards
     return (screenWidth - 40 - 24) / 3;
   }
 
@@ -55,25 +48,25 @@ class ProductCardSmall extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Image with tight 8px radius
               Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: w,
                       height: w,
-                      color: const Color(0x1A0E1019),
-                      child:
-                          product.baseImageUrl != null &&
+                      color: isDark ? AppColors.neutral800 : const Color(0x1A0E1019),
+                      child: product.baseImageUrl != null &&
                               product.baseImageUrl!.isNotEmpty
                           ? Image.network(
                               product.baseImageUrl!,
                               fit: BoxFit.cover,
                               width: w,
                               height: w,
-                            errorBuilder: (_, __, ___) => _placeholder(isDark),
-                          )
-                        : _placeholder(isDark),
+                              errorBuilder: (_, __, ___) => _placeholder(isDark),
+                            )
+                          : _placeholder(isDark),
                     ),
                   ),
                   // Wishlist heart icon (top-right)
@@ -98,41 +91,86 @@ class ProductCardSmall extends StatelessWidget {
                                 ),
                               )
                             : Icon(
-                                isWishlisted ? Icons.favorite : Icons.favorite_border,
+                                isWishlisted
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
                                 size: 13,
-                                color: isWishlisted ? Colors.red : AppColors.neutral800,
+                                color: isWishlisted
+                                    ? Colors.red
+                                    : AppColors.neutral800,
                               ),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
+              // Rating badge (if available)
+              if (product.reviewCount > 0) ...[
+                _buildRating(context),
+                const SizedBox(height: 4),
+              ],
+              // Product Name: max 2 lines
               Text(
                 product.name,
                 style: TextStyle(
                   fontFamily: 'Roboto',
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w500,
                   fontSize: 12,
+                  height: 1.15,
                   color: isDark ? AppColors.neutral200 : AppColors.neutral800,
                 ),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 6),
-              Text(
-                _priceLabel(),
-                style: TextStyle(
-                  fontFamily: 'Roboto',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: isDark ? AppColors.white : AppColors.neutral900,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 4),
+              // Price and ADD button row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      _priceLabel(),
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: isDark ? AppColors.white : AppColors.neutral900,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: onAddToCart ?? onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.neutral800 : AppColors.white,
+                        border: Border.all(
+                          color: AppColors.primary500,
+                          width: 1.2,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'ADD',
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              _buildRating(context),
             ],
           ),
         ),
@@ -140,7 +178,7 @@ class ProductCardSmall extends StatelessWidget {
     );
   }
 
-  /// Rating badge (Figma: smaller variant — 43px pill, star 14, text 12px)
+  /// Rating badge
   Widget _buildRating(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (product.reviewCount == 0) return const SizedBox.shrink();
@@ -149,22 +187,22 @@ class ProductCardSmall extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
             color: AppColors.successGreen,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.star, size: 14, color: AppColors.white),
+              const Icon(Icons.star, size: 11, color: AppColors.white),
               const SizedBox(width: 1),
               Text(
                 ratingStr,
                 style: const TextStyle(
                   fontFamily: 'Roboto',
                   fontWeight: FontWeight.w700,
-                  fontSize: 12,
+                  fontSize: 10,
                   color: AppColors.white,
                 ),
               ),
@@ -174,12 +212,12 @@ class ProductCardSmall extends StatelessWidget {
         const SizedBox(width: 3),
         Flexible(
           child: Text(
-            '${product.reviewCount}',
+            '(${product.reviewCount})',
             style: TextStyle(
               fontFamily: 'Roboto',
               fontWeight: FontWeight.w400,
-              fontSize: 12,
-              color: isDark ? AppColors.neutral300 : AppColors.neutral900,
+              fontSize: 10,
+              color: isDark ? AppColors.neutral400 : AppColors.neutral600,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

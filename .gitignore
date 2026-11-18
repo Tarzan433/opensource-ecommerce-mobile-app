@@ -22,6 +22,9 @@ migrate_working_dir/
 .vscode/mcp.json
 .kilocode/mcp.json
 
+# Local secrets and config
+secrets.local.json
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
@@ -70,3 +73,7 @@ assets/ml/
 # **/GoogleService-Info.plist
 # !android/app/google-services.json
 # !ios/Runner/GoogleService-Info.plist
+# Widget Preview related
+.widget_preview/
+
+/backup_bagisto_db_*.sql
